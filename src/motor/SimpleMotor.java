@@ -1,41 +1,55 @@
 package simplemotor.motor;
+
+import simplemotor.motor.config.SimpleMotorConfig;
+import simplemotor.motor.measurements.Measurements;
+import simplemotor.motor.requests.MotorRequest;
+import simplemotor.motor.requests.PrimitivePercentRequest;
+import simplemotor.motor.requests.StopRequest;
+
+import java.util.Random;
+
 public class SimpleMotor{
-    private double percentOutput;
-    private double position;
-    private final double MAX_SPEED_DEGREES_PER_SECOND;
-    private boolean logWrappedAround;
+    private static Random motorStartPositionGen = new Random();
+    private final Measurements measurements;
 
-    public SimpleMotor(double MAX_SPEED_DEGREES_PER_SECOND, double startingPosition,
-                       double percentOutput, boolean logWrappedAround){
+    private final SimpleMotorConfig config;
 
-        this.MAX_SPEED_DEGREES_PER_SECOND = MAX_SPEED_DEGREES_PER_SECOND;
-        this.percentOutput = percentOutput;
-        position = startingPosition;
-        this.logWrappedAround = logWrappedAround;
+    private MotorRequest activeRequest;
+
+    public SimpleMotor(SimpleMotorConfig config){
+
+        this.config = config;
+
+        measurements =  new Measurements(config.MAX_SPEED_ROTATIONS_PER_MINUTE);
+
+        activeRequest = new StopRequest(measurements);
+
+        // Randomize the motor start position to simulate the motor not being at zero 100% of the time
+        measurements.positionRotations = motorStartPositionGen.nextDouble(0,1);
     }
 
     public void setPercentOutput(double percentOutput){
-        this.percentOutput = percentOutput;
+        activeRequest = new PrimitivePercentRequest(measurements, percentOutput);
+        activeRequest.start();
+        logNewPosition();
     }
 
-    public void setLogMode(boolean logWrappedAround){
-        this.logWrappedAround = logWrappedAround;
+    public void stop(){
+        activeRequest = new StopRequest(measurements);
+        activeRequest.start();
+        logNewPosition();
     }
 
-    public void calculateNewPosition(double timePassedSeconds){
-        position += MAX_SPEED_DEGREES_PER_SECOND * percentOutput * timePassedSeconds;
-    }
 
     public void logNewPosition(){
-        if (logWrappedAround) {
-            System.out.println(position % 360);
-        } else {
-            System.out.println(position);
-        }
+        System.out.println(measurements.positionRotations - (
+                config.zeroOffset.isPresent() ? config.zeroOffset.get().getRotations() : 0)
+        );
+        System.out.println(measurements.velocityRPM);
     }
 
     public void update(double timePassedSeconds){
-        calculateNewPosition(timePassedSeconds);
+        activeRequest.update(timePassedSeconds);
         logNewPosition();
     }
 }
